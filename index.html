@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>StepTrack — трекер маршрутов</title>
+    <link rel="manifest" href="manifest.json">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#4caf84">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+    <style>
+        :root { --bg: #1a1a2e; --card: #16213e; --accent: #4caf84; --text: #fff; }
+        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-user-select: none; user-select: none; }
+        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); height: 100vh; display: flex; flex-direction: column; touch-action: manipulation; }
+        .header { background: var(--card); padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
+        .header h1 { font-size: 18px; }
+        #map { flex: 1; width: 100%; }
+        .controls { background: var(--card); padding: 12px 16px; display: flex; gap: 8px; align-items: center; flex-shrink: 0; flex-wrap: wrap; }
+        .btn { padding: 10px 16px; border-radius: 12px; border: none; font-weight: bold; cursor: pointer; font-size: 14px; }
+        .btn-start { background: var(--accent); color: #fff; }
+        .btn-stop { background: #e94560; color: #fff; }
+        .btn-mode { background: transparent; border: 2px solid var(--accent); color: var(--accent); }
+        .btn-mode.active { background: var(--accent); color: #fff; }
+        .stats { display: flex; gap: 16px; flex-wrap: wrap; font-size: 13px; }
+        .stat { background: #0d0d1a; padding: 6px 12px; border-radius: 8px; }
+        .stat b { color: var(--accent); }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🗺️ StepTrack</h1>
+        <div class="stats">
+            <span class="stat">📍 <b id="dist">0.00</b> км</span>
+            <span class="stat">⏱ <b id="time">00:00</b></span>
+            <span class="stat">⚡ <b id="speed">0.0</b> км/ч</span>
+        </div>
+    </div>
+    <div id="map"></div>
+    <div class="controls">
+        <button class="btn btn-start" id="startBtn" onclick="startTracking()">▶ Старт</button>
+        <button class="btn btn-stop" id="stopBtn" onclick="stopTracking()" style="display:none;">⏹ Стоп</button>
+        <button class="btn btn-mode active" onclick="setMode('walk')" id="modeWalk">🚶 Пешком</button>
+        <button class="btn btn-mode" onclick="setMode('bike')" id="modeBike">🚴 Вело</button>
+        <button class="btn btn-mode" onclick="setMode('run')" id="modeRun">🏃 Бег</button>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
+        
+        let map, track = [], watchId = null, timer = null, seconds = 0;
+        let mode = 'walk', tracking = false;
+        
+        function initMap() {
+            map = L.map('map', { zoomControl: false, attributionControl: false }).setView([55.7512, 37.6184], 16);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+            
+            const saved = localStorage.getItem('steptrack-last');
+            if (saved) {
+                const points = JSON.parse(saved);
+                if (points.length > 0) {
+                    L.polyline(points, { color: '#4caf84', weight: 4 }).addTo(map);
+                    map.fitBounds(points);
+                }
+            }
+        }
+
+        function setMode(m) {
+            mode = m;
+            document.querySelectorAll('.btn-mode').forEach(b => b.classList.remove('active'));
+            document.getElementById('mode' + m.charAt(0).toUpperCase() + m.slice(1)).classList.add('active');
+        }
+
+        function startTracking() {
+            if (!navigator.geolocation) { alert('Геолокация не поддерживается'); return; }
+            
+            tracking = true; track = []; seconds = 0;
+            document.getElementById('startBtn').style.display = 'none';
+            document.getElementById('stopBtn').style.display = '';
+            
+            watchId = navigator.geolocation.watchPosition(
+                (pos) => {
+                    const pt = [pos.coords.latitude, pos.coords.longitude];
+                    track.push(pt);
+                    L.circleMarker(pt, { radius: 3, color: '#4caf84' }).addTo(map);
+                    if (track.length > 1) L.polyline([track[track.length-2], pt], { color: '#4caf84', weight: 3 }).addTo(map);
+                    updateStats();
+                    localStorage.setItem('steptrack-current', JSON.stringify(track));
+                },
+                () => {},
+                { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 }
+            );
+            
+            timer = setInterval(() => { seconds++; document.getElementById('time').textContent = formatTime(seconds); }, 1000);
+        }
+
+        function stopTracking() {
+            tracking = false;
+            if (watchId) navigator.geolocation.clearWatch(watchId);
+            if (timer) clearInterval(timer);
+            
+            document.getElementById('startBtn').style.display = '';
+            document.getElementById('stopBtn').style.display = 'none';
+            
+            localStorage.setItem('steptrack-last', JSON.stringify(track));
+            localStorage.removeItem('steptrack-current');
+            
+            const history = JSON.parse(localStorage.getItem('steptrack-history') || '[]');
+            history.push({ date: new Date().toISOString(), mode, distance: calcDistance(), time: seconds, track });
+            if (history.length > 50) history.shift();
+            localStorage.setItem('steptrack-history', JSON.stringify(history));
+            
+            map.eachLayer(l => { if (l instanceof L.CircleMarker || l instanceof L.Polyline) map.removeLayer(l); });
+            if (track.length > 0) {
+                const color = { walk: '#4caf84', bike: '#4a90d9', run: '#ff9800' }[mode];
+                L.polyline(track, { color, weight: 4 }).addTo(map);
+                map.fitBounds(track);
+            }
+        }
+
+        function calcDistance() {
+            let d = 0;
+            for (let i = 1; i < track.length; i++) d += getDist(track[i-1][0], track[i-1][1], track[i][0], track[i][1]);
+            return d;
+        }
+
+        function getDist(lat1, lon1, lat2, lon2) {
+            const R = 6371, dLat = (lat2-lat1)*Math.PI/180, dLon = (lon2-lon1)*Math.PI/180;
+            const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
+            return R*2*Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        }
+
+        function updateStats() {
+            const dist = calcDistance();
+            document.getElementById('dist').textContent = dist.toFixed(2);
+            document.getElementById('speed').textContent = seconds > 0 ? (dist/(seconds/3600)).toFixed(1) : '0.0';
+        }
+
+        function formatTime(s) { const m = Math.floor(s/60); return String(m).padStart(2,'0')+':'+String(s%60).padStart(2,'0'); }
+
+        initMap();
+    </script>
+</body>
+</html>
