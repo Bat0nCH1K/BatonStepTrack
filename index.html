@@ -7,27 +7,37 @@
     <link rel="manifest" href="manifest.json">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="theme-color" content="#4caf84">
+    <meta name="theme-color" content="#0a0a1a">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
     <style>
         :root { --bg: #1a1a2e; --card: #16213e; --accent: #4caf84; --text: #fff; }
         * { margin: 0; padding: 0; box-sizing: border-box; -webkit-user-select: none; user-select: none; }
         body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); height: 100vh; display: flex; flex-direction: column; touch-action: manipulation; }
-        .header { background: var(--card); padding: 6px 12px; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
-        .header h1 { font-size: 16px; }
-        #map { flex: 1; width: 100%; }
-        .globe-container { flex: 1; display: flex; align-items: center; justify-content: center; background: #0a0a1a; }
-        .globe { font-size: 100px; animation: spin 8s linear infinite; }
+        .header { background: var(--card); padding: 5px 10px; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
+        .header h1 { font-size: 15px; }
+        #map { flex: 1; width: 100%; max-height: calc(100vh - 100px); display: none; }
+        .globe-container { 
+            flex: 1; display: flex; align-items: center; justify-content: center; 
+            background: radial-gradient(circle at center, #1a2a4a 0%, #0a0a1a 70%);
+            position: relative;
+        }
+        .globe { font-size: 120px; animation: spin 12s linear infinite; }
+        .globe-title { 
+            position: absolute; bottom: 30%; left: 50%; transform: translateX(-50%);
+            font-size: 22px; font-weight: bold; color: #fff;
+            text-shadow: 0 0 20px rgba(76,175,132,0.5);
+        }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-        .controls { background: var(--card); padding: 6px 12px; display: flex; gap: 6px; align-items: center; flex-shrink: 0; flex-wrap: wrap; }
-        .btn { padding: 8px 12px; border-radius: 10px; border: none; font-weight: bold; cursor: pointer; font-size: 13px; }
+        .controls { background: var(--card); padding: 5px 10px; display: flex; gap: 5px; align-items: center; flex-shrink: 0; flex-wrap: wrap; }
+        .btn { padding: 7px 10px; border-radius: 8px; border: none; font-weight: bold; cursor: pointer; font-size: 12px; }
         .btn-start { background: var(--accent); color: #fff; }
         .btn-stop { background: #e94560; color: #fff; }
         .btn-resume { background: #ff9800; color: #fff; }
         .btn-mode { background: transparent; border: 2px solid var(--accent); color: var(--accent); }
         .btn-mode.active { background: var(--accent); color: #fff; }
-        .stats { display: flex; gap: 8px; flex-wrap: wrap; font-size: 12px; }
-        .stat { background: #0d0d1a; padding: 4px 8px; border-radius: 6px; }
+        .btn-locate { background: transparent; border: 2px solid #4a90d9; color: #4a90d9; }
+        .stats { display: flex; gap: 6px; flex-wrap: wrap; font-size: 11px; }
+        .stat { background: #0d0d1a; padding: 3px 6px; border-radius: 5px; }
         .stat b { color: var(--accent); }
         
         .history-overlay {
@@ -73,14 +83,16 @@
             <span class="stat">⚡ <b id="speed">0.0</b> км/ч</span>
         </div>
     </div>
-    <div id="map" style="display:none;"></div>
+    <div id="map"></div>
     <div class="globe-container" id="globeContainer">
         <div class="globe">🌍</div>
+        <div class="globe-title">BatonStepTrack</div>
     </div>
     <div class="controls">
         <button class="btn btn-start" id="startBtn" onclick="startTracking()">▶ Старт</button>
         <button class="btn btn-resume" id="resumeBtn" onclick="resumeTracking()" style="display:none;">🔄 Продолжить</button>
         <button class="btn btn-stop" id="stopBtn" onclick="stopTracking()" style="display:none;">⏹ Стоп</button>
+        <button class="btn btn-locate" id="locateBtn" onclick="locateMe()" style="display:none;">📍</button>
         <button class="btn btn-mode active" onclick="setMode('walk')" id="modeWalk">🚶</button>
         <button class="btn btn-mode" onclick="setMode('bike')" id="modeBike">🚴</button>
         <button class="btn btn-mode" onclick="setMode('run')" id="modeRun">🏃</button>
@@ -103,19 +115,20 @@
         let map = null, track = [], watchId = null, timer = null, seconds = 0;
         let mode = 'walk', tracking = false, mapInitialized = false;
         let currentPolyline = null, gpsMarker = null, gpsWatchId = null;
+        let currentLat = null, currentLng = null;
         
         function initMap() {
             if (mapInitialized) return;
             
             document.getElementById('globeContainer').style.display = 'none';
             document.getElementById('map').style.display = '';
+            document.getElementById('locateBtn').style.display = '';
             
             map = L.map('map', { zoomControl: false, attributionControl: false }).setView([55.7512, 37.6184], 16);
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
             
             mapInitialized = true;
             
-            // Последний маршрут — пунктиром
             const last = localStorage.getItem('bst-last');
             if (last) {
                 const pts = JSON.parse(last);
@@ -124,7 +137,6 @@
                 }
             }
             
-            // Незавершённый маршрут
             const current = localStorage.getItem('bst-current');
             if (current) {
                 track = JSON.parse(current);
@@ -158,8 +170,8 @@
             
             gpsWatchId = navigator.geolocation.watchPosition(
                 (pos) => {
-                    const lat = pos.coords.latitude;
-                    const lng = pos.coords.longitude;
+                    currentLat = pos.coords.latitude;
+                    currentLng = pos.coords.longitude;
                     
                     if (gpsMarker) map.removeLayer(gpsMarker);
                     
@@ -169,10 +181,10 @@
                         iconAnchor: [6, 6]
                     });
                     
-                    gpsMarker = L.marker([lat, lng], { icon }).addTo(map);
+                    gpsMarker = L.marker([currentLat, currentLng], { icon }).addTo(map);
                     
                     if (!tracking) {
-                        map.setView([lat, lng], 16, { animate: true, duration: 1 });
+                        map.setView([currentLat, currentLng], 16, { animate: true, duration: 1 });
                     }
                 },
                 () => {},
@@ -180,12 +192,16 @@
             );
         }
 
+        function locateMe() {
+            if (currentLat && currentLng && map) {
+                map.setView([currentLat, currentLng], 17, { animate: true, duration: 0.5 });
+            }
+        }
+
         function showTrack(pts, color) {
             if (!map) return;
             map.eachLayer(l => { 
-                if (l instanceof L.CircleMarker || (l instanceof L.Polyline)) {
-                    map.removeLayer(l);
-                }
+                if (l instanceof L.CircleMarker || (l instanceof L.Polyline)) map.removeLayer(l);
             });
             L.polyline(pts, { color, weight: 4 }).addTo(map);
             map.fitBounds(pts);
@@ -204,11 +220,7 @@
             
             initMap();
             
-            map.eachLayer(l => { 
-                if (l instanceof L.CircleMarker || (l instanceof L.Polyline)) {
-                    map.removeLayer(l);
-                }
-            });
+            map.eachLayer(l => { if (l instanceof L.CircleMarker || (l instanceof L.Polyline)) map.removeLayer(l); });
             if (gpsMarker) map.removeLayer(gpsMarker);
             if (gpsWatchId) navigator.geolocation.clearWatch(gpsWatchId);
             
@@ -223,7 +235,9 @@
             
             watchId = navigator.geolocation.watchPosition(
                 (pos) => {
-                    const pt = [pos.coords.latitude, pos.coords.longitude];
+                    currentLat = pos.coords.latitude;
+                    currentLng = pos.coords.longitude;
+                    const pt = [currentLat, currentLng];
                     track.push(pt);
                     L.circleMarker(pt, { radius: 3, color: '#4caf84' }).addTo(map);
                     if (track.length > 1) L.polyline([track[track.length-2], pt], { color: '#4caf84', weight: 3 }).addTo(map);
@@ -265,13 +279,11 @@
             
             const color = { walk: '#4caf84', bike: '#4a90d9', run: '#ff9800', car: '#e94560' }[mode];
             showTrack(track, color);
-            
             showGPSPosition();
         }
 
         function showHistory() {
             initMap();
-            
             const history = JSON.parse(localStorage.getItem('bst-history') || '[]');
             const list = document.getElementById('historyList');
             
@@ -285,20 +297,15 @@
                     const dateStr = d.toLocaleDateString('ru-RU') + ' ' + d.toLocaleTimeString('ru-RU', { hour:'2-digit', minute:'2-digit' });
                     return `<div class="history-item" onclick="viewHistory(${history.length - 1 - i})">
                         <span class="mode-icon">${modeEmoji}</span>
-                        <div class="info">
-                            <div class="date">${dateStr}</div>
-                            <div class="stats" style="color:${color}">${h.distance.toFixed(2)} км | ${formatTime(h.time)}</div>
-                        </div>
+                        <div class="info"><div class="date">${dateStr}</div>
+                        <div class="stats" style="color:${color}">${h.distance.toFixed(2)} км | ${formatTime(h.time)}</div></div>
                     </div>`;
                 }).join('');
             }
-            
             document.getElementById('historyOverlay').classList.add('open');
         }
 
-        function hideHistory() {
-            document.getElementById('historyOverlay').classList.remove('open');
-        }
+        function hideHistory() { document.getElementById('historyOverlay').classList.remove('open'); }
 
         function viewHistory(index) {
             const history = JSON.parse(localStorage.getItem('bst-history') || '[]');
@@ -318,20 +325,17 @@
             for (let i = 1; i < track.length; i++) d += getDist(track[i-1][0], track[i-1][1], track[i][0], track[i][1]);
             return d;
         }
-
         function getDist(lat1, lon1, lat2, lon2) {
             const R = 6371, dLat = (lat2-lat1)*Math.PI/180, dLon = (lon2-lon1)*Math.PI/180;
             const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
             return R*2*Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
         }
-
         function updateStats() {
             const dist = calcDistance();
             document.getElementById('dist').textContent = dist.toFixed(2);
             const maxSpeed = { walk: 6, bike: 25, run: 15, car: 120 }[mode];
             document.getElementById('speed').textContent = seconds > 0 ? Math.min((dist/(seconds/3600)), maxSpeed).toFixed(1) : '0.0';
         }
-
         function formatTime(s) { const m = Math.floor(s/60); return String(m).padStart(2,'0')+':'+String(s%60).padStart(2,'0'); }
     </script>
 </body>
