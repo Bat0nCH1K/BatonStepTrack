@@ -15,18 +15,10 @@
         body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); height: 100vh; display: flex; flex-direction: column; touch-action: manipulation; }
         .header { background: var(--card); padding: 5px 10px; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
         .header h1 { font-size: 15px; }
-        #map { flex: 1; width: 100%; max-height: calc(100vh - 100px); display: none; background: #0a0a1a; }
-        .globe-container { 
-            flex: 1; display: flex; align-items: center; justify-content: center; 
-            background: radial-gradient(circle at center, #1a2a4a 0%, #0a0a1a 70%);
-            position: relative;
-        }
+        #map { flex: 1; width: 100%; max-height: calc(100vh - 140px); display: none; background: #0a0a1a; }
+        .globe-container { flex: 1; display: flex; align-items: center; justify-content: center; background: radial-gradient(circle at center, #1a2a4a 0%, #0a0a1a 70%); position: relative; }
         .globe { font-size: 120px; animation: spin 12s linear infinite; }
-        .globe-title { 
-            position: absolute; bottom: 30%; left: 50%; transform: translateX(-50%);
-            font-size: 22px; font-weight: bold; color: #fff;
-            text-shadow: 0 0 20px rgba(76,175,132,0.5);
-        }
+        .globe-title { position: absolute; bottom: 30%; left: 50%; transform: translateX(-50%); font-size: 22px; font-weight: bold; color: #fff; text-shadow: 0 0 20px rgba(76,175,132,0.5); }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         .controls { background: var(--card); padding: 5px 10px; display: flex; gap: 5px; align-items: center; flex-shrink: 0; flex-wrap: wrap; }
         .btn { padding: 7px 10px; border-radius: 8px; border: none; font-weight: bold; cursor: pointer; font-size: 12px; }
@@ -39,49 +31,23 @@
         .stats { display: flex; gap: 6px; flex-wrap: wrap; font-size: 11px; }
         .stat { background: #0d0d1a; padding: 3px 6px; border-radius: 5px; }
         .stat b { color: var(--accent); }
-        
-        .offline-toggle {
-            display: flex; align-items: center; gap: 4px; font-size: 11px; color: #888;
-            padding: 4px 8px; background: #0d0d1a; border-radius: 6px; cursor: pointer;
-        }
+        .offline-toggle { display: flex; align-items: center; gap: 4px; font-size: 11px; color: #888; padding: 4px 8px; background: #0d0d1a; border-radius: 6px; cursor: pointer; }
         .offline-toggle input { accent-color: var(--accent); }
-        
-        .history-overlay {
-            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(0,0,0,0.8); z-index: 1000; display: none;
-            flex-direction: column; padding: 20px;
-        }
+        .console-log { background: #000; color: #0f0; font-family: monospace; font-size: 10px; padding: 5px 10px; max-height: 80px; overflow-y: auto; display: none; border-top: 1px solid #333; }
+        .console-log.visible { display: block; }
+        .history-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); z-index: 1000; display: none; flex-direction: column; padding: 20px; }
         .history-overlay.open { display: flex; }
-        .history-panel {
-            background: var(--card); border-radius: 16px; padding: 20px;
-            max-height: 80vh; overflow-y: auto;
-        }
+        .history-panel { background: var(--card); border-radius: 16px; padding: 20px; max-height: 80vh; overflow-y: auto; }
         .history-panel h3 { margin-bottom: 12px; text-align: center; }
-        .history-item {
-            background: #0d0d1a; padding: 10px 14px; border-radius: 10px;
-            margin-bottom: 8px; display: flex; justify-content: space-between;
-            align-items: center; cursor: pointer; position: relative;
-        }
+        .history-item { background: #0d0d1a; padding: 10px 14px; border-radius: 10px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; position: relative; }
         .history-item:active { opacity: 0.7; }
         .history-item .mode-icon { font-size: 20px; }
         .history-item .info { flex: 1; margin: 0 10px; }
         .history-item .info .date { font-size: 11px; color: #888; }
         .history-item .info .stats { font-size: 13px; }
-        .history-delete {
-            background: none; border: none; color: #e94560; font-size: 16px;
-            cursor: pointer; padding: 4px 8px; z-index: 10;
-        }
-        
-        .gps-dot {
-            width: 12px; height: 12px; background: var(--accent);
-            border: 3px solid #fff; border-radius: 50%;
-            box-shadow: 0 0 10px var(--accent);
-            animation: pulse 1.5s infinite;
-        }
-        @keyframes pulse {
-            0%, 100% { box-shadow: 0 0 5px var(--accent); }
-            50% { box-shadow: 0 0 20px var(--accent), 0 0 40px var(--accent); }
-        }
+        .history-delete { background: none; border: none; color: #e94560; font-size: 16px; cursor: pointer; padding: 4px 8px; z-index: 10; }
+        .gps-dot { width: 12px; height: 12px; background: var(--accent); border: 3px solid #fff; border-radius: 50%; box-shadow: 0 0 10px var(--accent); animation: pulse 1.5s infinite; }
+        @keyframes pulse { 0%, 100% { box-shadow: 0 0 5px var(--accent); } 50% { box-shadow: 0 0 20px var(--accent), 0 0 40px var(--accent); } }
     </style>
 </head>
 <body>
@@ -98,6 +64,7 @@
         <div class="globe">🌍</div>
         <div class="globe-title">BatonStepTrack</div>
     </div>
+    <div class="console-log" id="consoleLog"></div>
     <div class="controls">
         <button class="btn btn-start" id="startBtn" onclick="startTracking()">▶ Старт</button>
         <button class="btn btn-resume" id="resumeBtn" onclick="resumeTracking()" style="display:none;">🔄 Продолжить</button>
@@ -109,8 +76,8 @@
         <button class="btn btn-mode" onclick="setMode('car')" id="modeCar">🚗</button>
         <button class="btn btn-mode" onclick="showHistory()" style="border-color:#ff9800;color:#ff9800;">📋</button>
         <label class="offline-toggle"><input type="checkbox" id="offlineMode" onchange="toggleOfflineMode()"> Карта не грузит :(</label>
+        <button class="btn btn-mode" onclick="toggleConsole()" style="border-color:#888;color:#888;">📟</button>
     </div>
-
     <div class="history-overlay" id="historyOverlay">
         <div class="history-panel">
             <h3>📋 История маршрутов</h3>
@@ -118,170 +85,7 @@
             <button class="btn btn-stop" onclick="hideHistory()" style="width:100%;margin-top:12px;">Закрыть</button>
         </div>
     </div>
-
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script>
-        let map = null, track = [], watchId = null, timer = null, seconds = 0;
-        let mode = 'walk', tracking = false, mapInitialized = false;
-        let gpsMarker = null, gpsWatchId = null;
-        let currentLat = null, currentLng = null;
-        let wakeLock = null;
-        let offlineForced = false;
-
-        function toggleOfflineMode() {
-            offlineForced = document.getElementById('offlineMode').checked;
-            if (map) {
-                if (offlineForced) {
-                    map.getContainer().style.background = '#0a0a1a';
-                } else {
-                    map.getContainer().style.background = '';
-                    // Пробуем загрузить карту заново
-                    const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 3000));
-                    Promise.race([fetch('https://tile.openstreetmap.org/0/0/0.png', { method: 'HEAD' }), timeout])
-                        .then(() => L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map))
-                        .catch(() => map.getContainer().style.background = '#0a0a1a');
-                }
-            }
-        }
-
-        async function requestWakeLock() { try { wakeLock = await navigator.wakeLock.request('screen'); } catch(e) {} }
-        function releaseWakeLock() { if (wakeLock) { wakeLock.release(); wakeLock = null; } }
-
-        window.addEventListener('beforeunload', (e) => {
-            if (tracking) { e.preventDefault(); e.returnValue = 'Идёт запись маршрута. Выйти?'; return e.returnValue; }
-        });
-
-        function autoRestore() {
-            const saved = localStorage.getItem('bst-current');
-            if (saved) {
-                track = JSON.parse(saved);
-                const savedSeconds = parseInt(localStorage.getItem('bst-seconds') || '0');
-                const startTime = localStorage.getItem('bst-start-time');
-                const savedMode = localStorage.getItem('bst-mode') || 'walk';
-                if (startTime) { seconds = savedSeconds + Math.floor((Date.now() - new Date(startTime).getTime()) / 1000); if (seconds < savedSeconds) seconds = savedSeconds; }
-                else seconds = savedSeconds;
-                mode = savedMode;
-                document.getElementById('time').textContent = formatTime(seconds);
-                document.getElementById('startBtn').style.display = 'none';
-                document.getElementById('resumeBtn').style.display = '';
-                document.getElementById('stopBtn').style.display = '';
-                document.getElementById('locateBtn').style.display = '';
-                document.querySelectorAll('.btn-mode').forEach(b => b.classList.remove('active'));
-                const modeBtn = document.getElementById('mode' + mode.charAt(0).toUpperCase() + mode.slice(1));
-                if (modeBtn) modeBtn.classList.add('active');
-                updateStats();
-                if (!mapInitialized) { document.getElementById('globeContainer').style.display = 'none'; document.getElementById('map').style.display = ''; initMapSilent(); }
-            }
-        }
-
-        function initMapSilent() {
-            if (mapInitialized) return;
-            document.getElementById('map').style.display = ''; 
-            document.getElementById('globeContainer').style.display = 'none';
-            
-            map = L.map('map', { zoomControl: false, attributionControl: false, minZoom: 2, maxZoom: 19 }).setView([55.7512, 37.6184], 16);
-            
-            if (offlineForced) {
-                map.getContainer().style.background = '#0a0a1a';
-            } else {
-                const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 3000));
-                Promise.race([fetch('https://tile.openstreetmap.org/0/0/0.png', { method: 'HEAD' }), timeout])
-                    .then(() => L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map))
-                    .catch(() => map.getContainer().style.background = '#0a0a1a');
-            }
-            
-            mapInitialized = true;
-            
-            if (track.length > 0) { 
-                track.forEach(pt => L.circleMarker(pt, { radius: 3, color: '#ff9800' }).addTo(map)); 
-                if (track.length > 1) L.polyline(track, { color: '#ff9800', weight: 3 }).addTo(map); 
-                map.fitBounds(track); 
-            }
-            
-            const last = localStorage.getItem('bst-last');
-            if (last && track.length === 0) { 
-                const pts = JSON.parse(last); 
-                if (pts.length > 0) L.polyline(pts, { color: '#4caf84', weight: 3, opacity: 0.4, dashArray: '5,5' }).addTo(map); 
-            }
-        }
-        
-        function initMap() { if (!mapInitialized) initMapSilent(); }
-
-        function showGPSPosition() {
-            if (!navigator.geolocation || !map) return;
-            if (gpsWatchId) navigator.geolocation.clearWatch(gpsWatchId);
-            gpsWatchId = navigator.geolocation.watchPosition(
-                (pos) => { 
-                    currentLat = pos.coords.latitude; currentLng = pos.coords.longitude; 
-                    if (gpsMarker) map.removeLayer(gpsMarker); 
-                    gpsMarker = L.marker([currentLat, currentLng], { icon: L.divIcon({ className: 'gps-dot', iconSize: [12, 12], iconAnchor: [6, 6] }) }).addTo(map); 
-                    if (!tracking) map.setView([currentLat, currentLng], 16, { animate: true, duration: 1 }); 
-                },
-                () => {}, 
-                { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 }
-            );
-        }
-
-        function locateMe() { 
-            if (currentLat && currentLng && map) map.setView([currentLat, currentLng], 17, { animate: true, duration: 0.5 });
-            else alert('📍 Жду сигнал GPS...');
-        }
-        function showTrack(pts, color) { if (!map) return; map.eachLayer(l => { if (l instanceof L.CircleMarker || (l instanceof L.Polyline)) map.removeLayer(l); }); L.polyline(pts, { color, weight: 4 }).addTo(map); map.fitBounds(pts); if (gpsMarker) gpsMarker.addTo(map); }
-        function setMode(m) { mode = m; document.querySelectorAll('.btn-mode').forEach(b => b.classList.remove('active')); const btn = document.getElementById('mode' + m.charAt(0).toUpperCase() + m.slice(1)); if (btn) btn.classList.add('active'); }
-
-        function startTracking() {
-            if (!navigator.geolocation) { alert('Геолокация не поддерживается'); return; }
-            initMap();
-            map.eachLayer(l => { if (l instanceof L.CircleMarker || (l instanceof L.Polyline)) map.removeLayer(l); });
-            if (gpsMarker) map.removeLayer(gpsMarker);
-            if (gpsWatchId) navigator.geolocation.clearWatch(gpsWatchId);
-            tracking = true; track = []; seconds = 0;
-            document.getElementById('startBtn').style.display = 'none'; document.getElementById('resumeBtn').style.display = 'none';
-            document.getElementById('stopBtn').style.display = ''; document.getElementById('locateBtn').style.display = '';
-            localStorage.setItem('bst-start-time', new Date().toISOString()); localStorage.setItem('bst-seconds', '0');
-            localStorage.setItem('bst-mode', mode); localStorage.setItem('bst-current', '[]');
-            requestWakeLock();
-            watchId = navigator.geolocation.watchPosition(
-                (pos) => { currentLat = pos.coords.latitude; currentLng = pos.coords.longitude; const pt = [currentLat, currentLng]; track.push(pt); localStorage.setItem('bst-current', JSON.stringify(track)); L.circleMarker(pt, { radius: 3, color: '#4caf84' }).addTo(map); if (track.length > 1) L.polyline([track[track.length-2], pt], { color: '#4caf84', weight: 3 }).addTo(map); updateStats(); },
-                () => {}, { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 }
-            );
-            timer = setInterval(() => { seconds++; document.getElementById('time').textContent = formatTime(seconds); localStorage.setItem('bst-seconds', seconds.toString()); }, 1000);
-        }
-
-        function resumeTracking() { startTracking(); }
-
-        function stopTracking() {
-            tracking = false; releaseWakeLock();
-            if (watchId) navigator.geolocation.clearWatch(watchId);
-            if (timer) clearInterval(timer);
-            document.getElementById('startBtn').style.display = ''; document.getElementById('resumeBtn').style.display = 'none'; document.getElementById('stopBtn').style.display = 'none';
-            localStorage.setItem('bst-last', JSON.stringify(track)); localStorage.removeItem('bst-current'); localStorage.removeItem('bst-start-time'); localStorage.removeItem('bst-seconds');
-            const history = JSON.parse(localStorage.getItem('bst-history') || '[]');
-            history.push({ date: new Date().toISOString(), mode, distance: calcDistance(), time: seconds, track });
-            if (history.length > 50) history.shift();
-            localStorage.setItem('bst-history', JSON.stringify(history));
-            showTrack(track, { walk:'#4caf84', bike:'#4a90d9', run:'#ff9800', car:'#e94560' }[mode]);
-            showGPSPosition();
-        }
-
-        function showHistory() { initMap(); renderHistory(); document.getElementById('historyOverlay').classList.add('open'); }
-        function hideHistory() { document.getElementById('historyOverlay').classList.remove('open'); }
-        function deleteHistory(index) { const h = JSON.parse(localStorage.getItem('bst-history') || '[]'); h.splice(index,1); localStorage.setItem('bst-history', JSON.stringify(h)); renderHistory(); }
-        function renderHistory() {
-            const history = JSON.parse(localStorage.getItem('bst-history') || '[]');
-            document.getElementById('historyList').innerHTML = history.length === 0 ? '<p style="text-align:center;color:#888;">Нет сохранённых маршрутов</p>' : history.slice().reverse().map((h, i) => {
-                const ri = history.length-1-i;
-                return `<div class="history-item" onclick="viewHistory(${ri})"><span class="mode-icon">${{ walk:'🚶', bike:'🚴', run:'🏃', car:'🚗' }[h.mode]||'📍'}</span><div class="info"><div class="date">${new Date(h.date).toLocaleDateString('ru-RU')+' '+new Date(h.date).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})}</div><div class="stats" style="color:${{ walk:'#4caf84', bike:'#4a90d9', run:'#ff9800', car:'#e94560' }[h.mode]||'#4caf84'}">${h.distance.toFixed(2)} км | ${formatTime(h.time)}</div></div><button class="history-delete" onclick="event.stopPropagation();deleteHistory(${ri})">🗑</button></div>`;
-            }).join('');
-        }
-        function viewHistory(index) { const route = (JSON.parse(localStorage.getItem('bst-history')||'[]'))[index]; if (route?.track) { showTrack(route.track, { walk:'#4caf84', bike:'#4a90d9', run:'#ff9800', car:'#e94560' }[route.mode]||'#4caf84'); document.getElementById('dist').textContent = route.distance.toFixed(2); document.getElementById('time').textContent = formatTime(route.time); document.getElementById('speed').textContent = route.time>0 ? (route.distance/(route.time/3600)).toFixed(1) : '0.0'; hideHistory(); } }
-
-        function calcDistance() { let d=0; for(let i=1;i<track.length;i++) d+=getDist(track[i-1][0],track[i-1][1],track[i][0],track[i][1]); return d; }
-        function getDist(lat1,lon1,lat2,lon2) { const R=6371,dLat=(lat2-lat1)*Math.PI/180,dLon=(lon2-lon1)*Math.PI/180; return R*2*Math.atan2(Math.sqrt(Math.sin(dLat/2)**2+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2),Math.sqrt(1-(Math.sin(dLat/2)**2+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2))); }
-        function updateStats() { const d=calcDistance(); document.getElementById('dist').textContent=d.toFixed(2); document.getElementById('speed').textContent=seconds>0?Math.min((d/(seconds/3600)),{walk:6,bike:25,run:15,car:120}[mode]).toFixed(1):'0.0'; }
-        function formatTime(s) { return String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0'); }
-
-        autoRestore();
-    </script>
+    <script src="app.js"></script>
 </body>
 </html>
