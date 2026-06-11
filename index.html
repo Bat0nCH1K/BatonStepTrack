@@ -15,7 +15,7 @@
         body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); height: 100vh; display: flex; flex-direction: column; touch-action: manipulation; }
         .header { background: var(--card); padding: 5px 10px; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
         .header h1 { font-size: 15px; }
-        #map { flex: 1; width: 100%; max-height: calc(100vh - 100px); display: none; }
+        #map { flex: 1; width: 100%; max-height: calc(100vh - 100px); display: none; background: #0a0a1a; }
         .globe-container { 
             flex: 1; display: flex; align-items: center; justify-content: center; 
             background: radial-gradient(circle at center, #1a2a4a 0%, #0a0a1a 70%);
@@ -54,13 +54,17 @@
         .history-item {
             background: #0d0d1a; padding: 10px 14px; border-radius: 10px;
             margin-bottom: 8px; display: flex; justify-content: space-between;
-            align-items: center; cursor: pointer;
+            align-items: center; cursor: pointer; position: relative;
         }
         .history-item:active { opacity: 0.7; }
         .history-item .mode-icon { font-size: 20px; }
         .history-item .info { flex: 1; margin: 0 10px; }
         .history-item .info .date { font-size: 11px; color: #888; }
         .history-item .info .stats { font-size: 13px; }
+        .history-delete {
+            background: none; border: none; color: #e94560; font-size: 16px;
+            cursor: pointer; padding: 4px 8px; z-index: 10;
+        }
         
         .gps-dot {
             width: 12px; height: 12px; background: var(--accent);
@@ -110,40 +114,17 @@
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
-        if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
-        
         let map = null, track = [], watchId = null, timer = null, seconds = 0;
         let mode = 'walk', tracking = false, mapInitialized = false;
-        let currentPolyline = null, gpsMarker = null, gpsWatchId = null;
+        let gpsMarker = null, gpsWatchId = null;
         let currentLat = null, currentLng = null;
         let wakeLock = null;
 
-        // Захват wake lock чтобы телефон не засыпал
-        async function requestWakeLock() {
-            try {
-                wakeLock = await navigator.wakeLock.request('screen');
-                wakeLock.addEventListener('release', () => {});
-            } catch(e) {}
-        }
-        
-        function releaseWakeLock() {
-            if (wakeLock) { wakeLock.release(); wakeLock = null; }
-        }
+        async function requestWakeLock() { try { wakeLock = await navigator.wakeLock.request('screen'); } catch(e) {} }
+        function releaseWakeLock() { if (wakeLock) { wakeLock.release(); wakeLock = null; } }
 
-        // Защита от случайной перезагрузки
         window.addEventListener('beforeunload', (e) => {
-            if (tracking) {
-                e.preventDefault();
-                e.returnValue = 'Идёт запись маршрута. Вы уверены что хотите выйти?';
-                return e.returnValue;
-            }
-        });
-
-        // Фоновый трекинг — продолжает работать когда вкладка скрыта
-        document.addEventListener('visibilitychange', () => {
-            if (document.hidden && tracking) {
-                // Продолжаем трекать в фоне
-            }
+            if (tracking) { e.preventDefault(); e.returnValue = 'Идёт запись маршрута. Выйти?'; return e.returnValue; }
         });
 
         function autoRestore() {
@@ -153,55 +134,56 @@
                 const savedSeconds = parseInt(localStorage.getItem('bst-seconds') || '0');
                 const startTime = localStorage.getItem('bst-start-time');
                 const savedMode = localStorage.getItem('bst-mode') || 'walk';
-                
-                if (startTime) {
-                    seconds = savedSeconds + Math.floor((Date.now() - new Date(startTime).getTime()) / 1000);
-                    if (seconds < savedSeconds) seconds = savedSeconds;
-                } else seconds = savedSeconds;
-                
+                if (startTime) { seconds = savedSeconds + Math.floor((Date.now() - new Date(startTime).getTime()) / 1000); if (seconds < savedSeconds) seconds = savedSeconds; }
+                else seconds = savedSeconds;
                 mode = savedMode;
                 document.getElementById('time').textContent = formatTime(seconds);
                 document.getElementById('startBtn').style.display = 'none';
                 document.getElementById('resumeBtn').style.display = '';
                 document.getElementById('stopBtn').style.display = '';
                 document.getElementById('locateBtn').style.display = '';
-                
                 document.querySelectorAll('.btn-mode').forEach(b => b.classList.remove('active'));
                 const modeBtn = document.getElementById('mode' + mode.charAt(0).toUpperCase() + mode.slice(1));
                 if (modeBtn) modeBtn.classList.add('active');
                 updateStats();
-                
-                if (!mapInitialized) {
-                    document.getElementById('globeContainer').style.display = 'none';
-                    document.getElementById('map').style.display = '';
-                    initMapSilent();
-                }
+                if (!mapInitialized) { document.getElementById('globeContainer').style.display = 'none'; document.getElementById('map').style.display = ''; initMapSilent(); }
             }
         }
-        
+
         function initMapSilent() {
             if (mapInitialized) return;
-            document.getElementById('map').style.display = '';
+            document.getElementById('map').style.display = ''; 
             document.getElementById('globeContainer').style.display = 'none';
             
-            map = L.map('map', { zoomControl: false, attributionControl: false }).setView([55.7512, 37.6184], 16);
+            map = L.map('map', { 
+                zoomControl: false, 
+                attributionControl: false,
+                minZoom: 2,
+                maxZoom: 19
+            }).setView([55.7512, 37.6184], 16);
             
+            // Пробуем загрузить тайлы
             fetch('https://tile.openstreetmap.org/0/0/0.png', { method: 'HEAD' })
-                .then(() => L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map))
-                .catch(() => L.gridLayer({}).addTo(map));
+                .then(() => {
+                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+                })
+                .catch(() => {
+                    // Офлайн — тёмный фон
+                    map.getContainer().style.background = '#0a0a1a';
+                });
             
             mapInitialized = true;
             
-            if (track.length > 0) {
-                track.forEach(pt => L.circleMarker(pt, { radius: 3, color: '#ff9800' }).addTo(map));
-                if (track.length > 1) L.polyline(track, { color: '#ff9800', weight: 3 }).addTo(map);
-                map.fitBounds(track);
+            if (track.length > 0) { 
+                track.forEach(pt => L.circleMarker(pt, { radius: 3, color: '#ff9800' }).addTo(map)); 
+                if (track.length > 1) L.polyline(track, { color: '#ff9800', weight: 3 }).addTo(map); 
+                map.fitBounds(track); 
             }
             
             const last = localStorage.getItem('bst-last');
-            if (last && track.length === 0) {
-                const pts = JSON.parse(last);
-                if (pts.length > 0) L.polyline(pts, { color: '#4caf84', weight: 3, opacity: 0.4, dashArray: '5,5' }).addTo(map);
+            if (last && track.length === 0) { 
+                const pts = JSON.parse(last); 
+                if (pts.length > 0) L.polyline(pts, { color: '#4caf84', weight: 3, opacity: 0.4, dashArray: '5,5' }).addTo(map); 
             }
         }
         
@@ -211,149 +193,135 @@
             if (!navigator.geolocation || !map) return;
             if (gpsWatchId) navigator.geolocation.clearWatch(gpsWatchId);
             gpsWatchId = navigator.geolocation.watchPosition(
-                (pos) => {
-                    currentLat = pos.coords.latitude;
-                    currentLng = pos.coords.longitude;
-                    if (gpsMarker) map.removeLayer(gpsMarker);
-                    gpsMarker = L.marker([currentLat, currentLng], { icon: L.divIcon({ className: 'gps-dot', iconSize: [12, 12], iconAnchor: [6, 6] }) }).addTo(map);
-                    if (!tracking) map.setView([currentLat, currentLng], 16, { animate: true, duration: 1 });
+                (pos) => { 
+                    currentLat = pos.coords.latitude; 
+                    currentLng = pos.coords.longitude; 
+                    if (gpsMarker) map.removeLayer(gpsMarker); 
+                    gpsMarker = L.marker([currentLat, currentLng], { 
+                        icon: L.divIcon({ className: 'gps-dot', iconSize: [12, 12], iconAnchor: [6, 6] }) 
+                    }).addTo(map); 
+                    if (!tracking) map.setView([currentLat, currentLng], 16, { animate: true, duration: 1 }); 
                 },
-                () => {},
+                () => {}, 
                 { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 }
             );
         }
 
         function locateMe() { if (currentLat && currentLng && map) map.setView([currentLat, currentLng], 17, { animate: true, duration: 0.5 }); }
-
-        function showTrack(pts, color) {
-            if (!map) return;
-            map.eachLayer(l => { if (l instanceof L.CircleMarker || (l instanceof L.Polyline)) map.removeLayer(l); });
-            L.polyline(pts, { color, weight: 4 }).addTo(map);
-            map.fitBounds(pts);
-            if (gpsMarker) gpsMarker.addTo(map);
+        
+        function showTrack(pts, color) { 
+            if (!map) return; 
+            map.eachLayer(l => { if (l instanceof L.CircleMarker || (l instanceof L.Polyline)) map.removeLayer(l); }); 
+            L.polyline(pts, { color, weight: 4 }).addTo(map); 
+            map.fitBounds(pts); 
+            if (gpsMarker) gpsMarker.addTo(map); 
         }
-
-        function setMode(m) {
-            mode = m;
-            document.querySelectorAll('.btn-mode').forEach(b => b.classList.remove('active'));
-            const btn = document.getElementById('mode' + m.charAt(0).toUpperCase() + m.slice(1));
-            if (btn) btn.classList.add('active');
+        
+        function setMode(m) { 
+            mode = m; 
+            document.querySelectorAll('.btn-mode').forEach(b => b.classList.remove('active')); 
+            const btn = document.getElementById('mode' + m.charAt(0).toUpperCase() + m.slice(1)); 
+            if (btn) btn.classList.add('active'); 
         }
 
         function startTracking() {
             if (!navigator.geolocation) { alert('Геолокация не поддерживается'); return; }
             initMap();
-            
             map.eachLayer(l => { if (l instanceof L.CircleMarker || (l instanceof L.Polyline)) map.removeLayer(l); });
             if (gpsMarker) map.removeLayer(gpsMarker);
             if (gpsWatchId) navigator.geolocation.clearWatch(gpsWatchId);
-            
             tracking = true; track = []; seconds = 0;
-            document.getElementById('startBtn').style.display = 'none';
+            document.getElementById('startBtn').style.display = 'none'; 
             document.getElementById('resumeBtn').style.display = 'none';
-            document.getElementById('stopBtn').style.display = '';
+            document.getElementById('stopBtn').style.display = ''; 
             document.getElementById('locateBtn').style.display = '';
-            
-            localStorage.setItem('bst-start-time', new Date().toISOString());
+            localStorage.setItem('bst-start-time', new Date().toISOString()); 
             localStorage.setItem('bst-seconds', '0');
-            localStorage.setItem('bst-mode', mode);
+            localStorage.setItem('bst-mode', mode); 
             localStorage.setItem('bst-current', '[]');
-            
             requestWakeLock();
-            
             watchId = navigator.geolocation.watchPosition(
-                (pos) => {
-                    currentLat = pos.coords.latitude;
-                    currentLng = pos.coords.longitude;
-                    const pt = [currentLat, currentLng];
-                    track.push(pt);
-                    localStorage.setItem('bst-current', JSON.stringify(track));
-                    L.circleMarker(pt, { radius: 3, color: '#4caf84' }).addTo(map);
-                    if (track.length > 1) L.polyline([track[track.length-2], pt], { color: '#4caf84', weight: 3 }).addTo(map);
-                    updateStats();
+                (pos) => { 
+                    currentLat = pos.coords.latitude; 
+                    currentLng = pos.coords.longitude; 
+                    const pt = [currentLat, currentLng]; 
+                    track.push(pt); 
+                    localStorage.setItem('bst-current', JSON.stringify(track)); 
+                    L.circleMarker(pt, { radius: 3, color: '#4caf84' }).addTo(map); 
+                    if (track.length > 1) L.polyline([track[track.length-2], pt], { color: '#4caf84', weight: 3 }).addTo(map); 
+                    updateStats(); 
                 },
-                () => {},
+                () => {}, 
                 { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 }
             );
-            
             timer = setInterval(() => { 
                 seconds++; 
-                document.getElementById('time').textContent = formatTime(seconds);
-                localStorage.setItem('bst-seconds', seconds.toString());
+                document.getElementById('time').textContent = formatTime(seconds); 
+                localStorage.setItem('bst-seconds', seconds.toString()); 
             }, 1000);
         }
 
         function resumeTracking() { startTracking(); }
 
         function stopTracking() {
-            tracking = false;
-            releaseWakeLock();
+            tracking = false; releaseWakeLock();
             if (watchId) navigator.geolocation.clearWatch(watchId);
             if (timer) clearInterval(timer);
-            
-            document.getElementById('startBtn').style.display = '';
-            document.getElementById('resumeBtn').style.display = 'none';
+            document.getElementById('startBtn').style.display = ''; 
+            document.getElementById('resumeBtn').style.display = 'none'; 
             document.getElementById('stopBtn').style.display = 'none';
-            
-            localStorage.setItem('bst-last', JSON.stringify(track));
-            localStorage.removeItem('bst-current');
-            localStorage.removeItem('bst-start-time');
+            localStorage.setItem('bst-last', JSON.stringify(track)); 
+            localStorage.removeItem('bst-current'); 
+            localStorage.removeItem('bst-start-time'); 
             localStorage.removeItem('bst-seconds');
-            
             const history = JSON.parse(localStorage.getItem('bst-history') || '[]');
             history.push({ date: new Date().toISOString(), mode, distance: calcDistance(), time: seconds, track });
             if (history.length > 50) history.shift();
             localStorage.setItem('bst-history', JSON.stringify(history));
-            
-            const color = { walk: '#4caf84', bike: '#4a90d9', run: '#ff9800', car: '#e94560' }[mode];
-            showTrack(track, color);
+            showTrack(track, { walk:'#4caf84', bike:'#4a90d9', run:'#ff9800', car:'#e94560' }[mode]);
             showGPSPosition();
         }
 
-        function showHistory() {
-            initMap();
+        function showHistory() { initMap(); renderHistory(); document.getElementById('historyOverlay').classList.add('open'); }
+        function hideHistory() { document.getElementById('historyOverlay').classList.remove('open'); }
+
+        function deleteHistory(index) {
+            const history = JSON.parse(localStorage.getItem('bst-history') || '[]');
+            history.splice(index, 1);
+            localStorage.setItem('bst-history', JSON.stringify(history));
+            renderHistory();
+        }
+
+        function renderHistory() {
             const history = JSON.parse(localStorage.getItem('bst-history') || '[]');
             const list = document.getElementById('historyList');
             list.innerHTML = history.length === 0 
                 ? '<p style="text-align:center;color:#888;">Нет сохранённых маршрутов</p>'
                 : history.slice().reverse().map((h, i) => {
+                    const realIndex = history.length - 1 - i;
                     const em = { walk:'🚶', bike:'🚴', run:'🏃', car:'🚗' }[h.mode]||'📍';
                     const cl = { walk:'#4caf84', bike:'#4a90d9', run:'#ff9800', car:'#e94560' }[h.mode]||'#4caf84';
                     const d = new Date(h.date);
                     const ds = d.toLocaleDateString('ru-RU') + ' ' + d.toLocaleTimeString('ru-RU', { hour:'2-digit', minute:'2-digit' });
-                    return `<div class="history-item" onclick="viewHistory(${history.length-1-i})"><span class="mode-icon">${em}</span><div class="info"><div class="date">${ds}</div><div class="stats" style="color:${cl}">${h.distance.toFixed(2)} км | ${formatTime(h.time)}</div></div></div>`;
+                    return `<div class="history-item" onclick="viewHistory(${realIndex})"><span class="mode-icon">${em}</span><div class="info"><div class="date">${ds}</div><div class="stats" style="color:${cl}">${h.distance.toFixed(2)} км | ${formatTime(h.time)}</div></div><button class="history-delete" onclick="event.stopPropagation();deleteHistory(${realIndex})">🗑</button></div>`;
                 }).join('');
-            document.getElementById('historyOverlay').classList.add('open');
         }
-
-        function hideHistory() { document.getElementById('historyOverlay').classList.remove('open'); }
 
         function viewHistory(index) {
             const history = JSON.parse(localStorage.getItem('bst-history') || '[]');
             const route = history[index];
-            if (route?.track) {
-                showTrack(route.track, { walk:'#4caf84', bike:'#4a90d9', run:'#ff9800', car:'#e94560' }[route.mode]||'#4caf84');
-                document.getElementById('dist').textContent = route.distance.toFixed(2);
-                document.getElementById('time').textContent = formatTime(route.time);
-                document.getElementById('speed').textContent = route.time>0 ? (route.distance/(route.time/3600)).toFixed(1) : '0.0';
-                hideHistory();
+            if (route?.track) { 
+                showTrack(route.track, { walk:'#4caf84', bike:'#4a90d9', run:'#ff9800', car:'#e94560' }[route.mode]||'#4caf84'); 
+                document.getElementById('dist').textContent = route.distance.toFixed(2); 
+                document.getElementById('time').textContent = formatTime(route.time); 
+                document.getElementById('speed').textContent = route.time>0 ? (route.distance/(route.time/3600)).toFixed(1) : '0.0'; 
+                hideHistory(); 
             }
         }
 
-        function calcDistance() {
-            let d = 0;
-            for (let i=1; i<track.length; i++) d += getDist(track[i-1][0], track[i-1][1], track[i][0], track[i][1]);
-            return d;
-        }
-        function getDist(lat1, lon1, lat2, lon2) {
-            const R=6371, dLat=(lat2-lat1)*Math.PI/180, dLon=(lon2-lon1)*Math.PI/180;
-            return R*2*Math.atan2(Math.sqrt(Math.sin(dLat/2)**2+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2), Math.sqrt(1-(Math.sin(dLat/2)**2+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2)));
-        }
-        function updateStats() {
-            const dist = calcDistance();
-            document.getElementById('dist').textContent = dist.toFixed(2);
-            document.getElementById('speed').textContent = seconds>0 ? Math.min((dist/(seconds/3600)), { walk:6, bike:25, run:15, car:120 }[mode]).toFixed(1) : '0.0';
-        }
+        function calcDistance() { let d = 0; for (let i=1; i<track.length; i++) d += getDist(track[i-1][0], track[i-1][1], track[i][0], track[i][1]); return d; }
+        function getDist(lat1, lon1, lat2, lon2) { const R=6371, dLat=(lat2-lat1)*Math.PI/180, dLon=(lon2-lon1)*Math.PI/180; return R*2*Math.atan2(Math.sqrt(Math.sin(dLat/2)**2+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2), Math.sqrt(1-(Math.sin(dLat/2)**2+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2))); }
+        function updateStats() { const dist = calcDistance(); document.getElementById('dist').textContent = dist.toFixed(2); document.getElementById('speed').textContent = seconds>0 ? Math.min((dist/(seconds/3600)), { walk:6, bike:25, run:15, car:120 }[mode]).toFixed(1) : '0.0'; }
         function formatTime(s) { return String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0'); }
 
         autoRestore();
