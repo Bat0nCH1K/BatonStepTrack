@@ -1,4 +1,4 @@
-// BatonStepTrack — app.js v3 (с фоновым звуком)
+// BatonStepTrack — app.js v4 (с диагностикой)
 let map = null, track = [], watchId = null, timer = null, seconds = 0;
 let mode = 'walk', tracking = false, mapInitialized = false;
 let gpsMarker = null, gpsWatchId = null;
@@ -8,7 +8,6 @@ let offlineForced = false;
 let lastPoint = null;
 let silentAudio = null;
 
-// Бесшумная аудио-петля для фоновой работы
 function enableBackgroundAudio() {
     if (silentAudio) return;
     try {
@@ -20,17 +19,12 @@ function enableBackgroundAudio() {
         source.connect(ctx.destination);
         source.start();
         silentAudio = { ctx, source };
-        log('🔇 Фоновый звук включён');
-    } catch(e) {
-        log('⚠️ Аудио не поддерживается');
-    }
+        log('🔇 Фоновый звук вкл');
+    } catch(e) { log('⚠️ Аудио нет'); }
 }
 
 function disableBackgroundAudio() {
-    if (silentAudio) {
-        try { silentAudio.source.stop(); silentAudio.ctx.close(); } catch(e) {}
-        silentAudio = null;
-    }
+    if (silentAudio) { try { silentAudio.source.stop(); silentAudio.ctx.close(); } catch(e) {} silentAudio = null; }
 }
 
 function log(msg) {
@@ -53,10 +47,7 @@ function toggleOfflineMode() {
     }
 }
 
-async function requestWakeLock() {
-    try { wakeLock = await navigator.wakeLock.request('screen'); log('🔒 Экран'); }
-    catch(e) { log('⚠️ WakeLock нет'); }
-}
+async function requestWakeLock() { try { wakeLock = await navigator.wakeLock.request('screen'); log('🔒 Экран'); } catch(e) { log('⚠️ WakeLock нет'); } }
 function releaseWakeLock() { if (wakeLock) { wakeLock.release(); wakeLock = null; } }
 
 window.addEventListener('beforeunload', (e) => {
@@ -88,21 +79,65 @@ function autoRestore() {
 
 function initMapSilent() {
     if (mapInitialized) return;
-    log('🗺️ Карта...');
+    log('🗺️ Инициализация карты...');
+    
+    // Проверка Leaflet
+    if (typeof L === 'undefined') {
+        log('❌ Leaflet не загружен! CDN недоступен.');
+        document.getElementById('map').style.display = '';
+        document.getElementById('map').style.background = '#0a0a1a';
+        document.getElementById('map').innerHTML = '<p style="color:#e94560;text-align:center;padding:40px;font-size:14px;">❌ Библиотека карты не загрузилась.<br>Проверьте интернет.</p>';
+        document.getElementById('globeContainer').style.display = 'none';
+        mapInitialized = true;
+        return;
+    }
+    log('✅ Leaflet загружен');
+    
     document.getElementById('map').style.display = '';
     document.getElementById('globeContainer').style.display = 'none';
-    map = L.map('map', { zoomControl: false, attributionControl: false, minZoom: 2, maxZoom: 19 }).setView([55.7512, 37.6184], 16);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+    
+    try {
+        map = L.map('map', { zoomControl: false, attributionControl: false, minZoom: 2, maxZoom: 19 }).setView([55.7512, 37.6184], 16);
+        log('✅ Карта создана');
+    } catch(e) {
+        log('❌ Ошибка создания карты: ' + e.message);
+        return;
+    }
+    
+    // Пробуем загрузить тайлы
+    const tileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+    
+    tileLayer.on('tileerror', function(e) {
+        log('❌ Ошибка тайла: ' + e.tile.src.substring(0, 60));
+    });
+    
+    tileLayer.on('load', function() {
+        log('✅ Тайлы загружены');
+    });
+    
+    // Проверка через 3 секунды
     setTimeout(() => {
-        const container = map.getContainer();
-        if (container && container.querySelector('.leaflet-tile-pane').children.length === 0) {
-            container.style.background = '#0a0a1a'; log('📴 Тайлы не загрузились');
-        } else log('✅ Карта');
+        const tileCount = document.querySelector('.leaflet-tile-pane')?.children.length || 0;
+        log(`📊 Тайлов: ${tileCount}`);
+        if (tileCount === 0) {
+            log('❌ Тайлы не загрузились — тёмный фон');
+            map.getContainer().style.background = '#0a0a1a';
+        }
     }, 3000);
+    
     mapInitialized = true;
-    if (track.length > 0) { track.forEach(pt => L.circleMarker(pt, { radius: 3, color: '#ff9800' }).addTo(map)); if (track.length > 1) L.polyline(track, { color: '#ff9800', weight: 3 }).addTo(map); map.fitBounds(track); }
+    
+    if (track.length > 0) {
+        track.forEach(pt => L.circleMarker(pt, { radius: 3, color: '#ff9800' }).addTo(map));
+        if (track.length > 1) L.polyline(track, { color: '#ff9800', weight: 3 }).addTo(map);
+        map.fitBounds(track);
+    }
+    
     const last = localStorage.getItem('bst-last');
-    if (last && track.length === 0) { const pts = JSON.parse(last); if (pts.length > 0) L.polyline(pts, { color: '#4caf84', weight: 3, opacity: 0.4, dashArray: '5,5' }).addTo(map); }
+    if (last && track.length === 0) {
+        const pts = JSON.parse(last);
+        if (pts.length > 0) L.polyline(pts, { color: '#4caf84', weight: 3, opacity: 0.4, dashArray: '5,5' }).addTo(map);
+    }
 }
 
 function initMap() { if (!mapInitialized) initMapSilent(); }
@@ -179,5 +214,5 @@ function getDist(lat1,lon1,lat2,lon2) { const R=6371,dLat=(lat2-lat1)*Math.PI/18
 function updateStats() { const d=calcDistance(); document.getElementById('dist').textContent=d.toFixed(2); document.getElementById('speed').textContent=seconds>0?Math.min((d/(seconds/3600)),{walk:6,bike:25,run:15,car:120}[mode]).toFixed(1):'0.0'; }
 function formatTime(s) { return String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0'); }
 
-log('🚀 BatonStepTrack v3');
+log('🚀 BatonStepTrack v4');
 autoRestore();
