@@ -162,13 +162,13 @@
                 maxZoom: 19
             }).setView([55.7512, 37.6184], 16);
             
-            // Пробуем загрузить тайлы
-            fetch('https://tile.openstreetmap.org/0/0/0.png', { method: 'HEAD' })
+            // Таймаут 3 секунды на загрузку тайлов
+            const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 3000));
+            Promise.race([fetch('https://tile.openstreetmap.org/0/0/0.png', { method: 'HEAD' }), timeout])
                 .then(() => {
                     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
                 })
                 .catch(() => {
-                    // Офлайн — тёмный фон
                     map.getContainer().style.background = '#0a0a1a';
                 });
             
@@ -207,7 +207,13 @@
             );
         }
 
-        function locateMe() { if (currentLat && currentLng && map) map.setView([currentLat, currentLng], 17, { animate: true, duration: 0.5 }); }
+        function locateMe() { 
+            if (currentLat && currentLng && map) {
+                map.setView([currentLat, currentLng], 17, { animate: true, duration: 0.5 });
+            } else {
+                alert('📍 Жду сигнал GPS... Пройдитесь немного');
+            }
+        }
         
         function showTrack(pts, color) { 
             if (!map) return; 
